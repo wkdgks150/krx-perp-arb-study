@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gap FADE Backtest Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif; background: #0a0a0f; color: #e0e0e0; }
+
+  .header { padding: 16px 24px; background: #12121a; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+  .header .subtitle { font-size: 12px; color: #666; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 1fr 1fr auto auto; height: calc(100vh - 56px); gap: 1px; background: #1e1e2e; }
+
+  /* Controls */
+  .controls { grid-row: 1 / 3; padding: 16px; background: #12121a; overflow-y: auto; }
+  .control-group { margin-bottom: 16px; }
+  .control-group label { display: block; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .control-group .value { float: right; color: #4ecdc4; font-weight: 600; }
+  select, input[type=number] { width: 100%; padding: 8px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 6px; color: #fff; font-size: 13px; }
+  input[type=range] { width: 100%; accent-color: #4ecdc4; }
+  .toggle { display: flex; align-items: center; gap: 8px; }
+  .toggle input[type=checkbox] { width: 18px; height: 18px; accent-color: #4ecdc4; }
+  .preset-btn { width: 100%; padding: 8px; margin-top: 4px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 6px; color: #4ecdc4; cursor: pointer; font-size: 12px; }
+  .preset-btn:hover { background: #2a2a3e; }
+
+  /* Charts */
+  .candle-chart { background: #12121a; position: relative; }
+  .equity-chart { background: #12121a; padding: 8px; }
+  .equity-chart canvas { width: 100% !important; height: 100% !important; }
+
+  /* Stats */
+  .stats-bar { grid-column: 1 / -1; display: flex; gap: 1px; background: #1e1e2e; }
+  .stat { flex: 1; padding: 12px 16px; background: #12121a; text-align: center; }
+  .stat .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+  .stat .val { font-size: 18px; font-weight: 700; }
+  .stat .val.positive { color: #4ecdc4; }
+  .stat .val.negative { color: #ff6b6b; }
+
+  /* Trade table */
+  .trade-table-wrap { grid-column: 1 / -1; background: #12121a; overflow-y: auto; max-height: 280px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { position: sticky; top: 0; background: #1a1a2e; z-index: 1; }
+  th { padding: 8px 12px; text-align: left; color: #888; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+  td { padding: 6px 12px; border-top: 1px solid #1a1a2e; }
+  tr:hover { background: #1a1a2e; cursor: pointer; }
+  tr.win td { color: #4ecdc4; }
+  tr.loss td { color: #ff6b6b; }
+  .dir-long { color: #4ecdc4; }
+  .dir-short { color: #ff6b6b; }
+  .score-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .score-3 { background: #2a4a3a; color: #4ecdc4; }
+  .score-4 { background: #4a3a1a; color: #ffd93d; }
+
+  .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #4ecdc4; font-size: 16px; z-index: 999; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Gap FADE Backtest Dashboard</h1>
+    <div class="subtitle">Overnight gap mean-reversion strategy</div>
+  </div>
+  <div class="subtitle" id="lastUpdate"></div>
+</div>
+
+<div class="layout">
+  <!-- Controls Panel -->
+  <div class="controls">
+    <div class="control-group">
+      <label>Ticker</label>
+      <select id="ticker">
+        <option value="GOOGL" selected>GOOGL</option>
+        <option value="NVDA">NVDA</option>
+        <option value="TSLA">TSLA</option>
+        <option value="SPY">SPY</option>
+        <option value="AAPL">AAPL</option>
+        <option value="MSFT">MSFT</option>
+        <option value="META">META</option>
+        <option value="AMZN">AMZN</option>
+        <option value="ALL">ALL (8 tickers)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Gap Threshold <span class="value" id="gapThVal">0.5%</span></label>
+      <input type="range" id="gapTh" min="0.1" max="2.0" step="0.1" value="0.5">
+    </div>
+
+    <div class="control-group">
+      <label>Body Threshold <span class="value" id="bodyThVal">1.0%</span></label>
+      <input type="range" id="bodyTh" min="0.3" max="3.0" step="0.1" value="1.0">
+    </div>
+
+    <div class="control-group toggle">
+      <input type="checkbox" id="consec" checked>
+      <label style="margin:0">Consecutive Gap</label>
+    </div>
+
+    <div class="control-group">
+      <label>MA20 Distance <span class="value" id="maDistVal">0.0%</span></label>
+      <input type="range" id="maDist" min="0" max="5" step="0.5" value="0">
+    </div>
+
+    <div class="control-group">
+      <label>Min Score <span class="value" id="minScoreVal">3</span></label>
+      <input type="range" id="minScore" min="1" max="4" step="1" value="3">
+    </div>
+
+    <hr style="border-color:#2a2a3e; margin: 16px 0;">
+
+    <div class="control-group">
+      <label>Leverage <span class="value" id="levVal">5x</span></label>
+      <input type="range" id="leverage" min="1" max="20" step="1" value="5">
+    </div>
+
+    <div class="control-group">
+      <label>Capital ($)</label>
+      <input type="number" id="capital" value="1000" min="100" max="100000" step="100">
+    </div>
+
+    <div class="control-group">
+      <label>Fee (round-trip) <span class="value" id="feeVal">0.07%</span></label>
+      <input type="range" id="fee" min="0" max="0.2" step="0.01" value="0.07">
+    </div>
+
+    <hr style="border-color:#2a2a3e; margin: 16px 0;">
+
+    <div class="control-group">
+      <label>Presets</label>
+      <button class="preset-btn" onclick="applyPreset('aggressive')">A. Aggressive (Best Return)</button>
+      <button class="preset-btn" onclick="applyPreset('safe')">B. Safe (Best Winrate)</button>
+      <button class="preset-btn" onclick="applyPreset('balanced')">C. Balanced</button>
+    </div>
+  </div>
+
+  <!-- Candle Chart -->
+  <div class="candle-chart" id="candleChartContainer"></div>
+
+  <!-- Equity Curve -->
+  <div class="equity-chart">
+    <canvas id="equityCanvas"></canvas>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat"><div class="label">Trades</div><div class="val" id="statTrades">-</div></div>
+    <div class="stat"><div class="label">Win Rate</div><div class="val" id="statWinrate">-</div></div>
+    <div class="stat"><div class="label">Total P&L</div><div class="val" id="statPnl">-</div></div>
+    <div class="stat"><div class="label">Return</div><div class="val" id="statReturn">-</div></div>
+    <div class="stat"><div class="label">Max DD</div><div class="val" id="statMDD">-</div></div>
+    <div class="stat"><div class="label">Annual</div><div class="val" id="statAnnual">-</div></div>
+    <div class="stat"><div class="label">Avg Win</div><div class="val" id="statAvgWin">-</div></div>
+    <div class="stat"><div class="label">Avg Loss</div><div class="val" id="statAvgLoss">-</div></div>
+  </div>
+
+  <!-- Trade Table -->
+  <div class="trade-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th><th>Ticker</th><th>Gap</th><th>Score</th><th>Dir</th>
+          <th>Entry</th><th>Exit</th><th>P&L</th><th>P&L %</th><th>Capital</th>
+        </tr>
+      </thead>
+      <tbody id="tradeTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="loading" id="loading">Loading...</div>
+
+<script>
+// ─── State ───
+let candleChart, candleSeries, maLine, markerData = [];
+let equityChart;
+let debounceTimer;
+
+// ─── Init Charts ───
+function initCandleChart() {
+  const container = document.getElementById('candleChartContainer');
+  candleChart = LightweightCharts.createChart(container, {
+    layout: { background: { color: '#12121a' }, textColor: '#888' },
+    grid: { vertLines: { color: '#1a1a2e' }, horzLines: { color: '#1a1a2e' } },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderColor: '#2a2a3e' },
+    timeScale: { borderColor: '#2a2a3e', timeVisible: false },
+  });
+  candleSeries = candleChart.addCandlestickSeries({
+    upColor: '#4ecdc4', downColor: '#ff6b6b',
+    borderUpColor: '#4ecdc4', borderDownColor: '#ff6b6b',
+    wickUpColor: '#4ecdc4', wickDownColor: '#ff6b6b',
+  });
+  maLine = candleChart.addLineSeries({ color: '#ffd93d', lineWidth: 1, priceLineVisible: false });
+
+  new ResizeObserver(() => {
+    candleChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+  }).observe(container);
+}
+
+function initEquityChart() {
+  const ctx = document.getElementById('equityCanvas').getContext('2d');
+  equityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Capital ($)',
+          data: [],
+          borderColor: '#4ecdc4',
+          backgroundColor: 'rgba(78,205,196,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: [],
+        },
+        {
+          label: 'Drawdown (%)',
+          data: [],
+          borderColor: 'rgba(255,107,107,0.5)',
+          backgroundColor: 'rgba(255,107,107,0.1)',
+          fill: true,
+          yAxisID: 'dd',
+          tension: 0.3,
+          pointRadius: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, labels: { color: '#888', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#666', maxTicksLimit: 12, font: { size: 9 } }, grid: { color: '#1a1a2e' } },
+        y: { position: 'left', ticks: { color: '#4ecdc4', font: { size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: '#1a1a2e' } },
+        dd: { position: 'right', reverse: true, min: 0, max: 100, ticks: { color: '#ff6b6b', font: { size: 10 }, callback: v => v + '%' }, grid: { display: false } },
+      }
+    }
+  });
+}
+
+// ─── Fetch & Render ───
+async function runBacktest() {
+  document.getElementById('loading').style.display = 'block';
+
+  const params = new URLSearchParams({
+    ticker: document.getElementById('ticker').value,
+    gap_th: document.getElementById('gapTh').value,
+    body_th: document.getElementById('bodyTh').value,
+    consec: document.getElementById('consec').checked,
+    ma_dist: document.getElementById('maDist').value,
+    min_score: document.getElementById('minScore').value,
+    leverage: document.getElementById('leverage').value,
+    capital: document.getElementById('capital').value,
+    fee: document.getElementById('fee').value,
+  });
+
+  const res = await fetch('/api/backtest?' + params);
+  const data = await res.json();
+  render(data);
+  document.getElementById('loading').style.display = 'none';
+}
+
+function render(data) {
+  // Candle chart
+  candleSeries.setData(data.candles);
+  maLine.setData(data.ma_line);
+
+  // Trade markers
+  const markers = data.trades
+    .filter(t => data.candles.some(c => c.time === t.date))
+    .map(t => ({
+      time: t.date,
+      position: t.direction === 'LONG' ? 'belowBar' : 'aboveBar',
+      color: t.win ? '#4ecdc4' : '#ff6b6b',
+      shape: t.direction === 'LONG' ? 'arrowUp' : 'arrowDown',
+      text: (t.win ? '+' : '') + t.net_pnl.toFixed(0),
+    }));
+  candleSeries.setMarkers(markers);
+  candleChart.timeScale().fitContent();
+
+  // Equity curve
+  const initialCap = data.summary.initial_capital;
+  const labels = [data.trades.length > 0 ? '' : ''];
+  const capitals = [initialCap];
+  const dds = [0];
+  const colors = ['#4ecdc4'];
+
+  data.equity_curve.forEach(e => {
+    labels.push(e.date.slice(5));
+    capitals.push(e.capital);
+    dds.push(e.drawdown);
+  });
+
+  // Point colors: green for win trades, red for loss
+  const pointColors = [initialCap];
+  data.trades.forEach(t => {
+    pointColors.push(t.win ? '#4ecdc4' : '#ff6b6b');
+  });
+
+  equityChart.data.labels = labels;
+  equityChart.data.datasets[0].data = capitals;
+  equityChart.data.datasets[0].pointBackgroundColor = pointColors;
+  equityChart.data.datasets[1].data = dds;
+  equityChart.options.scales.y.min = Math.min(...capitals) * 0.9;
+  equityChart.update();
+
+  // Stats
+  const s = data.summary;
+  setText('statTrades', s.total_trades);
+  setStatVal('statWinrate', s.winrate + '%', s.winrate >= 55);
+  setStatVal('statPnl', '$' + s.total_pnl.toLocaleString(), s.total_pnl >= 0);
+  setStatVal('statReturn', (s.total_pct >= 0 ? '+' : '') + s.total_pct + '%', s.total_pct >= 0);
+  setStatVal('statMDD', s.max_drawdown + '%', false);
+  setStatVal('statAnnual', (s.annual_pct >= 0 ? '+' : '') + s.annual_pct + '%', s.annual_pct >= 0);
+  setStatVal('statAvgWin', '+$' + s.avg_win.toFixed(0), true);
+  setStatVal('statAvgLoss', '-$' + Math.abs(s.avg_loss).toFixed(0), false);
+
+  // Trade table
+  const tbody = document.getElementById('tradeTableBody');
+  tbody.innerHTML = data.trades.map(t => `
+    <tr class="${t.win ? 'win' : 'loss'}" onclick="scrollToDate('${t.date}')">
+      <td>${t.date}</td>
+      <td>${t.ticker}</td>
+      <td>${t.gap_pct > 0 ? '+' : ''}${t.gap_pct.toFixed(2)}%</td>
+      <td><span class="score-badge score-${t.score}">${t.score}/4</span></td>
+      <td class="${t.direction === 'LONG' ? 'dir-long' : 'dir-short'}">${t.direction}</td>
+      <td>$${t.entry.toFixed(2)}</td>
+      <td>$${t.exit.toFixed(2)}</td>
+      <td>${t.net_pnl >= 0 ? '+' : ''}$${t.net_pnl.toFixed(2)}</td>
+      <td>${t.ret_pct >= 0 ? '+' : ''}${t.ret_pct.toFixed(2)}%</td>
+      <td>$${t.capital_after.toLocaleString()}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('lastUpdate', new Date().toLocaleTimeString());
+}
+
+function setText(id, text) { document.getElementById(id).textContent = text; }
+function setStatVal(id, text, positive) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'val ' + (positive ? 'positive' : 'negative');
+}
+
+function scrollToDate(date) {
+  candleChart.timeScale().scrollToPosition(-candleChart.timeScale().getVisibleLogicalRange().from, false);
+  // Simple approach: fit content then scroll
+  const ts = Math.floor(new Date(date).getTime() / 1000);
+  candleChart.timeScale().scrollToRealTime();
+}
+
+// ─── Presets ───
+function applyPreset(name) {
+  const presets = {
+    aggressive: { gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 0, minScore: 3, leverage: 5 },
+    safe: { gapTh: 0.3, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 3 },
+    balanced: { gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 5 },
+  };
+  const p = presets[name];
+  document.getElementById('gapTh').value = p.gapTh;
+  document.getElementById('bodyTh').value = p.bodyTh;
+  document.getElementById('consec').checked = p.consec;
+  document.getElementById('maDist').value = p.maDist;
+  document.getElementById('minScore').value = p.minScore;
+  document.getElementById('leverage').value = p.leverage;
+  updateLabels();
+  runBacktest();
+}
+
+// ─── Event listeners ───
+function updateLabels() {
+  document.getElementById('gapThVal').textContent = document.getElementById('gapTh').value + '%';
+  document.getElementById('bodyThVal').textContent = document.getElementById('bodyTh').value + '%';
+  document.getElementById('maDistVal').textContent = document.getElementById('maDist').value + '%';
+  document.getElementById('minScoreVal').textContent = document.getElementById('minScore').value;
+  document.getElementById('levVal').textContent = document.getElementById('leverage').value + 'x';
+  document.getElementById('feeVal').textContent = document.getElementById('fee').value + '%';
+}
+
+function onParamChange() {
+  updateLabels();
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(runBacktest, 400);
+}
+
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', onParamChange);
+  el.addEventListener('change', onParamChange);
+});
+
+// ─── Init ───
+window.addEventListener('load', () => {
+  initCandleChart();
+  initEquityChart();
+  updateLabels();
+  runBacktest();
+});
+</script>
+</body>
+</html>
