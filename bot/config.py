@@ -32,11 +32,11 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ─── Strategy ───
 TICKERS = ["GOOGL", "NVDA", "MSFT"]
-GAP_THRESHOLD = 0.3       # %  (Safe: 0.3)
+GAP_THRESHOLD = 0.5       # %
 BODY_THRESHOLD = 1.0      # %
 CONSECUTIVE_GAP = True
-MA_DISTANCE = 3.0         # %  (Safe: 3.0 — only enter when far from MA)
-MIN_SCORE = 4             #    (Safe: 4/4 — all conditions must match)
+MA_DISTANCE = 0.0         # %
+MIN_SCORE = 3             #    (3/4 — 실전용, 더 많은 시그널)
 LEVERAGE = 10.0           # 10x leverage
 FEE_PCT = 0.07            # round-trip %
 SLIPPAGE_PCT = 0.05       # per side
