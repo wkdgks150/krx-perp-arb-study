@@ -17,7 +17,7 @@ app = FastAPI(title="Gap FADE Backtest")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 TICKERS = ["GOOGL", "NVDA", "TSLA", "SPY", "AAPL", "MSFT", "META", "AMZN"]
-_cache: dict[str, pd.DataFrame] = {}
+_cache = {}  # type: dict
 
 
 def fetch_data(ticker: str) -> pd.DataFrame:
@@ -64,7 +64,7 @@ def _score_row(row, gap_th, body_th, consec, ma_dist):
 
 
 def run_backtest(
-    tickers: list[str],
+    tickers,
     gap_th: float = 0.5,
     body_th: float = 1.0,
     consec: bool = True,
