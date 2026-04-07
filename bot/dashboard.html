@@ -75,15 +75,18 @@
     <div class="control-group">
       <label>Ticker</label>
       <select id="ticker">
-        <option value="GOOGL" selected>GOOGL</option>
-        <option value="NVDA">NVDA</option>
-        <option value="TSLA">TSLA</option>
-        <option value="SPY">SPY</option>
-        <option value="AAPL">AAPL</option>
-        <option value="MSFT">MSFT</option>
-        <option value="META">META</option>
-        <option value="AMZN">AMZN</option>
+        <option value="GOOGL,NVDA,MSFT" selected>GOOGL+NVDA+MSFT (Best)</option>
+        <option value="GOOGL,NVDA">GOOGL+NVDA</option>
+        <option value="GOOGL,NVDA,MSFT,SPY">Winners (4)</option>
         <option value="ALL">ALL (8 tickers)</option>
+        <option value="GOOGL">GOOGL only</option>
+        <option value="NVDA">NVDA only</option>
+        <option value="MSFT">MSFT only</option>
+        <option value="TSLA">TSLA only</option>
+        <option value="SPY">SPY only</option>
+        <option value="AAPL">AAPL only</option>
+        <option value="META">META only</option>
+        <option value="AMZN">AMZN only</option>
       </select>
     </div>
 
@@ -165,7 +168,7 @@
       <thead>
         <tr>
           <th>Date</th><th>Ticker</th><th>Gap</th><th>Score</th><th>Dir</th>
-          <th>Entry</th><th>Exit</th><th>P&L</th><th>P&L %</th><th>Capital</th>
+          <th>Entry</th><th>Exit</th><th>P&L</th><th>P&L %</th><th>Capital</th><th>Sim</th>
         </tr>
       </thead>
       <tbody id="tradeTableBody"></tbody>
@@ -337,6 +340,7 @@ function render(data) {
       <td>${t.net_pnl >= 0 ? '+' : ''}$${t.net_pnl.toFixed(2)}</td>
       <td>${t.ret_pct >= 0 ? '+' : ''}${t.ret_pct.toFixed(2)}%</td>
       <td>$${t.capital_after.toLocaleString()}</td>
+      <td>${t.n_simultaneous || 1}</td>
     </tr>
   `).join('');
 
@@ -360,11 +364,12 @@ function scrollToDate(date) {
 // ─── Presets ───
 function applyPreset(name) {
   const presets = {
-    aggressive: { gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 0, minScore: 3, leverage: 5 },
-    safe: { gapTh: 0.3, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 3 },
-    balanced: { gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 5 },
+    aggressive: { ticker: 'GOOGL,NVDA,MSFT', gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 0, minScore: 3, leverage: 5 },
+    safe: { ticker: 'GOOGL,NVDA,MSFT', gapTh: 0.3, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 3 },
+    balanced: { ticker: 'GOOGL,NVDA', gapTh: 0.5, bodyTh: 1.0, consec: true, maDist: 3, minScore: 4, leverage: 5 },
   };
   const p = presets[name];
+  if (p.ticker) document.getElementById('ticker').value = p.ticker;
   document.getElementById('gapTh').value = p.gapTh;
   document.getElementById('bodyTh').value = p.bodyTh;
   document.getElementById('consec').checked = p.consec;

@@ -42,6 +42,27 @@ def fetch_data(ticker: str) -> pd.DataFrame:
     return df
 
 
+def _score_row(row, gap_th, body_th, consec, ma_dist):
+    """Score a single row. Returns (score, reasons) or None."""
+    if row["Gap_Abs"] < 0.3:
+        return None
+    score = 0
+    reasons = []
+    if row["Gap_Abs"] >= gap_th:
+        score += 1
+        reasons.append(f"gap:{row['Gap_Pct']:+.2f}%")
+    if row["Prev_Body"] >= body_th and row["Prev_Body_Matches_Gap"]:
+        score += 1
+        reasons.append(f"body:{row['Prev_Body']:.1f}%")
+    if consec and row["Consec"]:
+        score += 1
+        reasons.append("consec")
+    if row["MA_Dist"] >= ma_dist:
+        score += 1
+        reasons.append(f"ma:{row['MA_Dist']:.1f}%")
+    return score, reasons
+
+
 def run_backtest(
     tickers: list[str],
     gap_th: float = 0.5,
@@ -59,103 +80,103 @@ def run_backtest(
     max_cap = capital
     max_dd = 0.0
 
+    # Load all data
     all_candles = {}
     for ticker in tickers:
-        df = fetch_data(ticker)
-        all_candles[ticker] = df
+        all_candles[ticker] = fetch_data(ticker)
 
+    # Collect ALL signals across all tickers with their dates
+    all_signals = []
+    for ticker in tickers:
+        df = all_candles[ticker]
         for idx, row in df.iterrows():
-            if row["Gap_Abs"] < 0.3:
+            result = _score_row(row, gap_th, body_th, consec, ma_dist)
+            if result is None:
                 continue
-
-            score = 0
-            reasons = []
-
-            if row["Gap_Abs"] >= gap_th:
-                score += 1
-                reasons.append(f"gap:{row['Gap_Pct']:+.2f}%")
-
-            if row["Prev_Body"] >= body_th and row["Prev_Body_Matches_Gap"]:
-                score += 1
-                reasons.append(f"body:{row['Prev_Body']:.1f}%")
-
-            if consec and row["Consec"]:
-                score += 1
-                reasons.append("consec")
-
-            if row["MA_Dist"] >= ma_dist:
-                score += 1
-                reasons.append(f"ma:{row['MA_Dist']:.1f}%")
-
+            score, reasons = result
             if score < min_score:
                 continue
-
-            # FADE: gap up → short, gap down → long
             direction = "SHORT" if row["Gap_Pct"] > 0 else "LONG"
-            entry_price = row["Open"]
-            exit_price = row["Close"]
-
+            entry_price = float(row["Open"])
+            exit_price = float(row["Close"])
             if direction == "SHORT":
                 ret_pct = (entry_price - exit_price) / entry_price * 100
             else:
                 ret_pct = (exit_price - entry_price) / entry_price * 100
-
-            position = capital * leverage
-            gross = position * (ret_pct / 100)
-            fee = position * (fee_pct / 100)
-            net = gross - fee
-
-            if net <= -capital:
-                capital = 0
-                trades.append({
-                    "date": idx.strftime("%Y-%m-%d"),
-                    "ticker": ticker,
-                    "direction": direction,
-                    "score": score,
-                    "reasons": reasons,
-                    "gap_pct": round(row["Gap_Pct"], 3),
-                    "entry": round(entry_price, 2),
-                    "exit": round(exit_price, 2),
-                    "ret_pct": round(ret_pct, 3),
-                    "net_pnl": round(-capital, 2),
-                    "capital_after": 0,
-                    "win": False,
-                })
-                equity_curve.append({"date": idx.strftime("%Y-%m-%d"), "capital": 0.0, "drawdown": 100.0})
-                break
-
-            capital += net
-            win = bool(net > 0)
-            max_cap = max(max_cap, capital)
-            dd = (max_cap - capital) / max_cap * 100 if max_cap > 0 else 0
-            max_dd = max(max_dd, dd)
-
-            trades.append({
+            all_signals.append({
                 "date": idx.strftime("%Y-%m-%d"),
                 "ticker": ticker,
                 "direction": direction,
                 "score": score,
                 "reasons": reasons,
-                "gap_pct": round(row["Gap_Pct"], 3),
-                "entry": round(entry_price, 2),
-                "exit": round(exit_price, 2),
-                "ret_pct": round(ret_pct, 3),
-                "net_pnl": round(net, 2),
-                "capital_after": round(capital, 2),
-                "win": win,
-            })
-            equity_curve.append({
-                "date": idx.strftime("%Y-%m-%d"),
-                "capital": round(capital, 2),
-                "drawdown": round(dd, 2),
+                "gap_pct": float(row["Gap_Pct"]),
+                "entry": entry_price,
+                "exit": exit_price,
+                "ret_pct": ret_pct,
             })
 
+    # Sort by date, then by score descending (best signals first each day)
+    all_signals.sort(key=lambda x: (x["date"], -x["score"]))
+
+    # Group signals by date → simultaneous portfolio execution
+    from itertools import groupby
+    for date, day_signals_iter in groupby(all_signals, key=lambda x: x["date"]):
         if capital <= 0:
             break
+        day_signals = list(day_signals_iter)
+        n = len(day_signals)
 
-    # Sort trades and equity by date
-    trades.sort(key=lambda x: x["date"])
-    equity_curve.sort(key=lambda x: x["date"])
+        # Split capital equally across all signals for the day
+        per_trade_capital = capital / n
+        day_pnl = 0.0
+
+        for sig in day_signals:
+            position = per_trade_capital * leverage
+            gross = position * (sig["ret_pct"] / 100)
+            fee = position * (fee_pct / 100)
+            net = gross - fee
+
+            # Cap loss at allocated capital
+            if net < -per_trade_capital:
+                net = -per_trade_capital
+
+            day_pnl += net
+            win = bool(net > 0)
+
+            trades.append({
+                "date": sig["date"],
+                "ticker": sig["ticker"],
+                "direction": sig["direction"],
+                "score": sig["score"],
+                "reasons": sig["reasons"],
+                "gap_pct": round(sig["gap_pct"], 3),
+                "entry": round(sig["entry"], 2),
+                "exit": round(sig["exit"], 2),
+                "ret_pct": round(sig["ret_pct"], 3),
+                "net_pnl": round(net, 2),
+                "capital_after": 0,  # filled below
+                "win": win,
+                "n_simultaneous": n,
+            })
+
+        capital += day_pnl
+        if capital < 0:
+            capital = 0
+
+        # Update capital_after for all trades on this date
+        for t in trades:
+            if t["date"] == date and t["capital_after"] == 0:
+                t["capital_after"] = round(capital, 2)
+
+        max_cap = max(max_cap, capital)
+        dd = (max_cap - capital) / max_cap * 100 if max_cap > 0 else 0
+        max_dd = max(max_dd, dd)
+        equity_curve.append({
+            "date": date,
+            "capital": round(capital, 2),
+            "drawdown": round(dd, 2),
+            "n_trades": n,
+        })
 
     # Summary stats
     total_trades = len(trades)
@@ -231,7 +252,7 @@ def api_backtest(
     capital: float = Query(1000.0),
     fee: float = Query(0.07),
 ):
-    tickers = TICKERS if ticker == "ALL" else [ticker]
+    tickers = TICKERS if ticker == "ALL" else [t.strip() for t in ticker.split(",")]
     result = run_backtest(tickers, gap_th, body_th, consec, ma_dist, min_score, leverage, capital, fee)
     return JSONResponse(content=result)
 
