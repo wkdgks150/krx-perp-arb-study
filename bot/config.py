@@ -32,15 +32,16 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ─── Strategy ───
 TICKERS = ["GOOGL", "NVDA", "MSFT"]
-GAP_THRESHOLD = 0.5      # %
+GAP_THRESHOLD = 0.3       # %  (Safe: 0.3)
 BODY_THRESHOLD = 1.0      # %
 CONSECUTIVE_GAP = True
-MA_DISTANCE = 0.0         # %
-MIN_SCORE = 3
-LEVERAGE = 5.0            # Alpaca margin = 2x max, DEX = higher
+MA_DISTANCE = 3.0         # %  (Safe: 3.0 — only enter when far from MA)
+MIN_SCORE = 4             #    (Safe: 4/4 — all conditions must match)
+LEVERAGE = 10.0           # 10x leverage
 FEE_PCT = 0.07            # round-trip %
+SLIPPAGE_PCT = 0.05       # per side
 MAX_POSITION_PCT = 0.95   # use 95% of capital (keep 5% buffer)
-MAX_DAILY_LOSS_PCT = 15.0 # stop bot if daily loss exceeds this %
+MAX_DAILY_LOSS_PCT = 20.0 # stop bot if daily loss exceeds this %
 
 # ─── Mode ───
 DRY_RUN = os.environ.get("DRY_RUN", "true").lower() == "true"  # log only, no real trades
