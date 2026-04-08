@@ -108,30 +108,29 @@ def serve():
 
 
 DASHBOARD_HTML = """<!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gap FADE Live</title>
+<title>Gap FADE 실시간</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#0a0a0f; color:#e0e0e0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; background:#0a0a0f; color:#e0e0e0; }
   .header { padding:16px 24px; background:#12121a; border-bottom:1px solid #1e1e2e; display:flex; justify-content:space-between; align-items:center; }
   .header h1 { font-size:18px; color:#fff; }
   .header .live { color:#4ecdc4; font-size:12px; animation: blink 1s infinite; }
   @keyframes blink { 50% { opacity:0.5; } }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#1e1e2e; padding:1px; }
   .card { background:#12121a; padding:20px; }
-  .card h2 { font-size:13px; color:#666; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px; }
+  .card h2 { font-size:13px; color:#666; margin-bottom:12px; letter-spacing:0.5px; }
   .big-num { font-size:32px; font-weight:700; }
   .big-num.positive { color:#4ecdc4; }
   .big-num.negative { color:#ff6b6b; }
   .row { display:flex; gap:24px; margin-top:8px; }
-  .row .item { }
-  .row .label { font-size:10px; color:#666; text-transform:uppercase; }
+  .row .label { font-size:10px; color:#666; }
   .row .val { font-size:16px; font-weight:600; }
   table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
-  th { text-align:left; padding:6px 8px; color:#666; font-size:10px; text-transform:uppercase; border-bottom:1px solid #1e1e2e; }
+  th { text-align:left; padding:6px 8px; color:#666; font-size:10px; border-bottom:1px solid #1e1e2e; }
   td { padding:6px 8px; border-bottom:1px solid #0a0a0f; }
   .long { color:#4ecdc4; }
   .short { color:#ff6b6b; }
@@ -144,100 +143,98 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .badge.skipped { background:#1a1a2e; color:#666; }
   .full-width { grid-column: 1 / -1; }
   .refresh-info { font-size:11px; color:#444; margin-top:8px; }
+  .strat-detail { font-size:12px; color:#999; line-height:2.0; }
+  .strat-detail b { color:#e0e0e0; }
+  .tag { background:#1a1a2e; padding:6px 12px; border-radius:6px; font-size:11px; display:inline-block; }
+  .tag-active { background:#4ecdc4; color:#000; font-weight:600; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Gap FADE — Live Dashboard</h1>
+  <h1>Gap FADE 실시간 대시보드</h1>
   <div><span class="live">● LIVE</span> <span id="clock" style="color:#666;font-size:12px;margin-left:8px"></span></div>
 </div>
 
 <div class="grid">
-  <!-- Strategy Summary -->
+  <!-- 전략 상세 -->
   <div class="card full-width" style="background:#0e1117;border-left:3px solid #4ecdc4;padding:16px 24px;">
-    <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;">
-      <div>
-        <div style="font-size:14px;font-weight:700;color:#4ecdc4;margin-bottom:8px;">Gap FADE Strategy</div>
-        <div style="font-size:12px;color:#999;line-height:1.8;">
-          Overnight gap mean-reversion. Gap up = SHORT, Gap down = LONG.<br>
-          Enter at US market open, exit at close. Profit when gaps fill intraday.
-        </div>
-      </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Tickers</div><div style="font-size:13px;font-weight:600;">GOOGL NVDA TSLA</div></div>
-        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Leverage</div><div style="font-size:13px;font-weight:600;">10x</div></div>
-        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Min Score</div><div style="font-size:13px;font-weight:600;">3/4</div></div>
-        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Platform</div><div style="font-size:13px;font-weight:600;">Binance Futures</div></div>
-      </div>
+    <div style="font-size:15px;font-weight:700;color:#4ecdc4;margin-bottom:12px;">전략: 오버나이트 갭 FADE (평균회귀)</div>
+    <div class="strat-detail">
+      미국 주식시장은 하루 6.5시간만 열린다. 장이 닫힌 사이 뉴스/이벤트로 <b>갭</b>(전일 종가 vs 당일 시가 차이)이 발생한다.<br>
+      이 갭은 통계적으로 <b>당일 장중에 메워지는 경향</b>이 있다 (평균회귀). 이걸 이용한다.<br><br>
+      <b>갭업(+) 발생 → 숏(SHORT)</b> 진입 — 가격이 내려올 것에 베팅<br>
+      <b>갭다운(-) 발생 → 롱(LONG)</b> 진입 — 가격이 올라올 것에 베팅<br>
+      장 시작(22:35 KST)에 진입, 장 마감(04:55 KST)에 청산. <b>당일 매매</b>.
     </div>
-    <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;">
-      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
-        <span style="color:#666;">1.</span> <span style="color:#e0e0e0;">Gap > 0.5%</span>
-      </div>
-      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
-        <span style="color:#666;">2.</span> <span style="color:#e0e0e0;">Prev candle body > 1% + same dir</span>
-      </div>
-      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
-        <span style="color:#666;">3.</span> <span style="color:#e0e0e0;">Consecutive gap</span>
-      </div>
-      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
-        <span style="color:#666;">4.</span> <span style="color:#e0e0e0;">MA20 distance</span>
-      </div>
-      <div style="background:#4ecdc4;color:#000;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;">
-        3+ conditions = TRADE
-      </div>
+
+    <div style="margin-top:16px;margin-bottom:8px;font-size:12px;color:#888;font-weight:600;">진입 조건 (스코어링 시스템)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <div class="tag"><span style="color:#666;">1.</span> 갭 > 0.5%</div>
+      <div class="tag"><span style="color:#666;">2.</span> 전일 캔들 몸통 > 1% + 갭과 같은 방향</div>
+      <div class="tag"><span style="color:#666;">3.</span> 연속 갭 (전일과 같은 방향)</div>
+      <div class="tag"><span style="color:#666;">4.</span> 20일 이동평균 이탈</div>
+      <div class="tag tag-active">3개 이상 충족 시 거래</div>
     </div>
-    <div style="margin-top:10px;font-size:11px;color:#555;">
-      Backtest (9mo): 195 trades | 55% WR | +136% (10x, after slippage) | Sharpe 1.83 | Schedule: 22:35 KST scan, 04:55 KST close
+
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid #1e1e2e;">
+      <div><div style="font-size:9px;color:#666;">종목</div><div style="font-size:13px;font-weight:600;">GOOGL  NVDA  TSLA</div></div>
+      <div><div style="font-size:9px;color:#666;">레버리지</div><div style="font-size:13px;font-weight:600;">10x</div></div>
+      <div><div style="font-size:9px;color:#666;">플랫폼</div><div style="font-size:13px;font-weight:600;">Binance Futures</div></div>
+      <div><div style="font-size:9px;color:#666;">스캔</div><div style="font-size:13px;font-weight:600;">22:35 KST</div></div>
+      <div><div style="font-size:9px;color:#666;">청산</div><div style="font-size:13px;font-weight:600;">04:55 KST</div></div>
+    </div>
+
+    <div style="margin-top:12px;font-size:11px;color:#555;">
+      백테스트 (9개월): 195거래 | 승률 55% | 수익 +136% (10x, 슬리피지 반영) | Sharpe 1.83
     </div>
   </div>
 
-  <!-- Balance -->
+  <!-- 계좌 잔고 -->
   <div class="card">
-    <h2>Account Balance</h2>
+    <h2>계좌 잔고</h2>
     <div class="big-num positive" id="balance">$---</div>
     <div class="row">
-      <div class="item"><div class="label">Available</div><div class="val" id="available">---</div></div>
-      <div class="item"><div class="label">Unrealized P&L</div><div class="val" id="upnl">---</div></div>
+      <div class="item"><div class="label">가용 잔고</div><div class="val" id="available">---</div></div>
+      <div class="item"><div class="label">미실현 손익</div><div class="val" id="upnl">---</div></div>
     </div>
   </div>
 
-  <!-- Prices -->
+  <!-- 현재 가격 -->
   <div class="card">
-    <h2>Stock Prices</h2>
+    <h2>현재 주가</h2>
     <div id="prices" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
   </div>
 
-  <!-- Positions -->
+  <!-- 보유 포지션 -->
   <div class="card full-width">
-    <h2>Open Positions</h2>
+    <h2>보유 포지션</h2>
     <table>
-      <thead><tr><th>Symbol</th><th>Direction</th><th>Qty</th><th>Entry</th><th>Mark</th><th>P&L</th><th>Lev</th></tr></thead>
-      <tbody id="positionsBody"><tr><td colspan="7" style="color:#444">No positions</td></tr></tbody>
+      <thead><tr><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>현재가</th><th>손익</th><th>레버</th></tr></thead>
+      <tbody id="positionsBody"><tr><td colspan="7" style="color:#444">포지션 없음</td></tr></tbody>
     </table>
   </div>
 
-  <!-- Recent Signals -->
+  <!-- 시그널 내역 -->
   <div class="card">
-    <h2>Recent Signals</h2>
+    <h2>시그널 내역</h2>
     <table>
-      <thead><tr><th>Date</th><th>Ticker</th><th>Dir</th><th>Score</th><th>Gap</th><th>Status</th></tr></thead>
+      <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>점수</th><th>갭</th><th>상태</th></tr></thead>
       <tbody id="signalsBody"></tbody>
     </table>
   </div>
 
-  <!-- Trade History -->
+  <!-- 거래 내역 -->
   <div class="card">
-    <h2>Trade History</h2>
+    <h2>거래 내역</h2>
     <table>
-      <thead><tr><th>Date</th><th>Ticker</th><th>Dir</th><th>Entry</th><th>Exit</th><th>P&L</th></tr></thead>
-      <tbody id="tradesBody"><tr><td colspan="6" style="color:#444">No trades yet</td></tr></tbody>
+      <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>진입가</th><th>청산가</th><th>손익</th></tr></thead>
+      <tbody id="tradesBody"><tr><td colspan="6" style="color:#444">거래 없음</td></tr></tbody>
     </table>
   </div>
 </div>
 
-<div style="padding:8px 24px;" class="refresh-info">Auto-refresh every 10s</div>
+<div style="padding:8px 24px;" class="refresh-info">10초마다 자동 새로고침</div>
 
 <script>
 async function refresh() {
@@ -255,7 +252,7 @@ async function refresh() {
       // Positions
       const pb = document.getElementById('positionsBody');
       if (acct.positions.length === 0) {
-        pb.innerHTML = '<tr><td colspan="7" style="color:#444">No positions</td></tr>';
+        pb.innerHTML = '<tr><td colspan="7" style="color:#444">포지션 없음</td></tr>';
       } else {
         pb.innerHTML = acct.positions.map(p => `
           <tr>
