@@ -1,0 +1,20 @@
+INFO:     Started server process [40374]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+/Applications/GitHub/krx-perp-arb-study/bot/live_dashboard.py:60: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat(),
+Live Dashboard: http://localhost:8001
+INFO:     127.0.0.1:51553 - "GET /api/live/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/live/prices HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/live/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/live/trades HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /api/live/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /api/live/prices HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /api/live/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /api/live/trades HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51588 - "GET /api/live/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/live/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/live/prices HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/live/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/live/trades HTTP/1.1" 200 OK

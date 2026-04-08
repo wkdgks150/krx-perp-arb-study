@@ -154,6 +154,45 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </div>
 
 <div class="grid">
+  <!-- Strategy Summary -->
+  <div class="card full-width" style="background:#0e1117;border-left:3px solid #4ecdc4;padding:16px 24px;">
+    <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#4ecdc4;margin-bottom:8px;">Gap FADE Strategy</div>
+        <div style="font-size:12px;color:#999;line-height:1.8;">
+          Overnight gap mean-reversion. Gap up = SHORT, Gap down = LONG.<br>
+          Enter at US market open, exit at close. Profit when gaps fill intraday.
+        </div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Tickers</div><div style="font-size:13px;font-weight:600;">GOOGL NVDA TSLA</div></div>
+        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Leverage</div><div style="font-size:13px;font-weight:600;">10x</div></div>
+        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Min Score</div><div style="font-size:13px;font-weight:600;">3/4</div></div>
+        <div><div style="font-size:9px;color:#666;text-transform:uppercase;">Platform</div><div style="font-size:13px;font-weight:600;">Binance Futures</div></div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
+        <span style="color:#666;">1.</span> <span style="color:#e0e0e0;">Gap > 0.5%</span>
+      </div>
+      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
+        <span style="color:#666;">2.</span> <span style="color:#e0e0e0;">Prev candle body > 1% + same dir</span>
+      </div>
+      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
+        <span style="color:#666;">3.</span> <span style="color:#e0e0e0;">Consecutive gap</span>
+      </div>
+      <div style="background:#1a1a2e;padding:6px 12px;border-radius:6px;font-size:11px;">
+        <span style="color:#666;">4.</span> <span style="color:#e0e0e0;">MA20 distance</span>
+      </div>
+      <div style="background:#4ecdc4;color:#000;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;">
+        3+ conditions = TRADE
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:#555;">
+      Backtest (9mo): 195 trades | 55% WR | +136% (10x, after slippage) | Sharpe 1.83 | Schedule: 22:35 KST scan, 04:55 KST close
+    </div>
+  </div>
+
   <!-- Balance -->
   <div class="card">
     <h2>Account Balance</h2>
