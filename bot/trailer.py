@@ -18,7 +18,7 @@ import notifier
 from bn_executor import BinanceExecutor
 
 TRAIL_PCT = 0.5   # close when price drops 0.5% from peak
-CHECK_INTERVAL = 3   # check every 3 seconds (API limit의 3.3%만 사용)
+CHECK_INTERVAL = 0.5  # check every 0.5s (API limit 20% — 최대 안전 속도)
 SAFETY_CLOSE_HOUR = 19  # 19:55 UTC = 04:55 KST (safety net)
 SAFETY_CLOSE_MIN = 55
 
