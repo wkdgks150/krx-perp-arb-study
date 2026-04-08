@@ -1,0 +1,6 @@
+bot/.env
+bot/trades.db
+bot/__pycache__/
+bot/*.pyc
+bot/*.log
+.DS_Store
