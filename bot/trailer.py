@@ -29,13 +29,24 @@ CHECK_INTERVAL = 0.5
 SAFETY_CLOSE_HOUR = 19
 SAFETY_CLOSE_MIN = 55
 
-# Shared state for dashboard API
+# Shared state — written to file for dashboard to read
+TRAIL_STATE_FILE = os.path.join(os.path.dirname(__file__), "trail_state.json")
+
 trail_state = {
     "running": False,
-    "positions": {},  # symbol -> {entry, peak, current, drop_pct, pnl_pct, direction}
+    "positions": {},
     "closed_today": [],
     "started_at": None,
 }
+
+
+def _save_state():
+    """Write trail state to file for dashboard."""
+    try:
+        with open(TRAIL_STATE_FILE, "w") as f:
+            json.dump(trail_state, f)
+    except Exception:
+        pass
 
 
 def check_market_environment(ex):
@@ -71,6 +82,7 @@ def run_trailer():
     trail_state["running"] = True
     trail_state["started_at"] = datetime.now(timezone.utc).isoformat()
     trail_state["closed_today"] = []
+    _save_state()
 
     notifier.send("📡 <b>Trailer Started</b>\nTrail 0.3% | 0.5초 간격 | 실시간 추적")
 
@@ -126,6 +138,7 @@ def run_trailer():
 
                 trail_state["running"] = False
                 trail_state["positions"] = {}
+                _save_state()
                 notifier.send("⏹ <b>Trailer 종료</b>\n내일 22:35 KST에 재시작")
                 break
 
@@ -226,6 +239,7 @@ def run_trailer():
                     else:
                         notifier.error(f"Trail close failed: {ticker}\n{result['error']}")
 
+            _save_state()
             time.sleep(CHECK_INTERVAL)
 
         except KeyboardInterrupt:

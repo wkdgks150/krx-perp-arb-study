@@ -108,12 +108,15 @@ def api_equity():
 
 @app.get("/api/live/trail")
 def api_trail():
-    """Get trailing stop status from trailer process."""
+    """Get trailing stop status from shared file."""
+    state_file = Path(__file__).parent / "trail_state.json"
     try:
-        from trailer import trail_state
-        return trail_state
+        if state_file.exists():
+            import json as _json
+            return _json.loads(state_file.read_text())
     except Exception:
-        return {"running": False, "positions": {}, "closed_today": []}
+        pass
+    return {"running": False, "positions": {}, "closed_today": []}
 
 
 @app.get("/api/live/prices")
