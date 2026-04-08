@@ -210,15 +210,25 @@ def cmd_status():
 
 
 def cmd_run():
-    """Scan + Execute in one shot with full error handling."""
+    """Scan + Execute + Trail in one shot."""
     notifier.bot_started()
     try:
         signals = cmd_scan()
         if signals:
             cmd_execute()
+            # Start trailing stop monitor
+            print("\n  Starting trailing stop monitor...")
+            from trailer import run_trailer
+            run_trailer()
     except Exception as e:
         notifier.error("Bot run failed", e)
         raise
+
+
+def cmd_trail():
+    """Start trailing stop monitor for existing positions."""
+    from trailer import run_trailer
+    run_trailer()
 
 
 def cmd_dash():
@@ -235,7 +245,7 @@ def main():
         return
     cmds = {
         "scan": cmd_scan, "execute": cmd_execute, "close": cmd_close,
-        "status": cmd_status, "run": cmd_run, "dash": cmd_dash,
+        "status": cmd_status, "run": cmd_run, "trail": cmd_trail, "dash": cmd_dash,
     }
     cmd = sys.argv[1].lower()
     if cmd in cmds:

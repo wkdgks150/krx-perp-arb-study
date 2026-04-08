@@ -54,15 +54,22 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
-# Bot scan+execute — daily 22:35 KST (13:35 UTC in summer)
+# Bot scan+execute+trail — daily 22:35 KST (13:35 UTC in summer)
+# Runs scan, enters positions, then monitors trailing stop until close
 sudo tee /etc/systemd/system/gapfade-scan.service > /dev/null << EOF
 [Unit]
-Description=Gap FADE Scan + Execute
+Description=Gap FADE Scan + Execute + Trail
 
 [Service]
-Type=oneshot
+Type=simple
 WorkingDirectory=$BOT_DIR
-ExecStart=$(which python3) main.py run
+ExecStart=$(which python3) -u main.py run
+Environment=PYTHONUNBUFFERED=1
+# Auto-stop after 7 hours (safety — market is 6.5h)
+RuntimeMaxSec=25200
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 sudo tee /etc/systemd/system/gapfade-scan.timer > /dev/null << EOF
@@ -77,10 +84,11 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-# Bot close — daily 04:55 KST (19:55 UTC in summer)
+# Safety close — daily 04:55 KST (19:55 UTC in summer)
+# Backup in case trailer didn't close everything
 sudo tee /etc/systemd/system/gapfade-close.service > /dev/null << EOF
 [Unit]
-Description=Gap FADE Close Positions
+Description=Gap FADE Safety Close
 
 [Service]
 Type=oneshot
