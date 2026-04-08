@@ -211,11 +211,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
   <!-- 계좌 잔고 -->
   <div class="card">
-    <h2>계좌 잔고</h2>
+    <h2>총 자산 (잔고 + 미실현손익)</h2>
     <div class="big-num positive" id="balance">$---</div>
     <div class="row">
       <div class="item"><div class="label">가용 잔고</div><div class="val" id="available">---</div></div>
       <div class="item"><div class="label">미실현 손익</div><div class="val" id="upnl">---</div></div>
+      <div class="item"><div class="label">원금 대비</div><div class="val" id="vs100">---</div></div>
     </div>
   </div>
 
@@ -261,12 +262,16 @@ async function refresh() {
     // Account
     const acct = await (await fetch('/api/live/account')).json();
     if (!acct.error) {
-      document.getElementById('balance').textContent = '$' + acct.balance.toFixed(2);
-      document.getElementById('balance').className = 'big-num ' + (acct.balance >= 100 ? 'positive' : 'negative');
+      const equity = acct.balance + acct.unrealizedPnl;
+      document.getElementById('balance').textContent = '$' + equity.toFixed(2);
+      document.getElementById('balance').className = 'big-num ' + (equity >= 100 ? 'positive' : 'negative');
       document.getElementById('available').textContent = '$' + acct.available.toFixed(2);
       const upnl = acct.unrealizedPnl;
       document.getElementById('upnl').textContent = (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2);
       document.getElementById('upnl').className = 'val ' + (upnl >= 0 ? 'pos' : 'neg');
+      const pctVs100 = ((equity - 100) / 100 * 100);
+      document.getElementById('vs100').textContent = (pctVs100 >= 0 ? '+' : '') + pctVs100.toFixed(1) + '%';
+      document.getElementById('vs100').className = 'val ' + (pctVs100 >= 0 ? 'pos' : 'neg');
 
       // Positions
       const pb = document.getElementById('positionsBody');
