@@ -84,17 +84,80 @@ def score_today(ticker: str) -> Optional[dict]:
     }
 
 
+def check_market_ok() -> bool:
+    """Check if market environment is favorable (SPY above MA20 or low vol)."""
+    try:
+        df = fetch_recent_data("SPY", days=30)
+        if df.empty or len(df) < 5:
+            return True
+        ma20 = df["Close"].rolling(20).mean().iloc[-1]
+        current = df["Close"].iloc[-1]
+        above_ma = current > ma20
+        vol = df["Close"].pct_change().rolling(5).std().iloc[-1] * 100
+        high_vol = vol > 2.5
+        if not above_ma and high_vol:
+            print(f"  [MARKET FILTER] SPY below MA20 + high vol ({vol:.1f}%) — skipping")
+            return False
+        return True
+    except Exception:
+        return True
+
+
+def auto_select_tickers() -> List[str]:
+    """Auto-select best FADE tickers based on recent win rate."""
+    ALL_CANDIDATES = ["GOOGL", "NVDA", "TSLA", "AAPL", "META", "AMZN", "MSFT", "SPY"]
+    scores = {}
+
+    for ticker in ALL_CANDIDATES:
+        try:
+            df = fetch_recent_data(ticker, days=90)
+            if df.empty or len(df) < 20:
+                continue
+            wins = 0
+            total = 0
+            for i in range(20, len(df)):
+                row = df.iloc[i]
+                if row["Gap_Abs"] < 0.5:
+                    continue
+                # FADE: gap up→short (win if close<open), gap down→long (win if close>open)
+                if row["Gap_Pct"] > 0:
+                    win = df["Close"].iloc[i] < df["Open"].iloc[i]
+                else:
+                    win = df["Close"].iloc[i] > df["Open"].iloc[i]
+                total += 1
+                if win:
+                    wins += 1
+            if total >= 5:
+                scores[ticker] = wins / total
+        except Exception:
+            continue
+
+    # Select tickers with >50% FADE win rate, top 3
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    selected = [t for t, wr in ranked if wr > 0.50][:3]
+
+    if selected:
+        print(f"  [AUTO SELECT] {', '.join(f'{t}({scores[t]*100:.0f}%)' for t in selected)}")
+    return selected if selected else config.TICKERS
+
+
 def scan_all() -> List[dict]:
-    """Scan all configured tickers for signals."""
+    """Scan all configured tickers for signals with market filter."""
+    # Market environment check
+    if not check_market_ok():
+        return []
+
+    # Use configured tickers (auto-select can be enabled later)
+    tickers = config.TICKERS
+
     signals = []
-    for ticker in config.TICKERS:
+    for ticker in tickers:
         try:
             signal = score_today(ticker)
             if signal:
                 signals.append(signal)
         except Exception as e:
             print(f"[WARN] Failed to scan {ticker}: {e}")
-    # Sort by score descending
     signals.sort(key=lambda x: x["score"], reverse=True)
     return signals
 

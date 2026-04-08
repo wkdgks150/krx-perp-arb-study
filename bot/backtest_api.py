@@ -242,13 +242,13 @@ def get_tickers():
 
 @app.get("/api/backtest")
 def api_backtest(
-    ticker: str = Query("GOOGL"),
+    ticker: str = Query("GOOGL,NVDA"),
     gap_th: float = Query(0.5),
     body_th: float = Query(1.0),
     consec: bool = Query(True),
     ma_dist: float = Query(0.0),
     min_score: int = Query(3),
-    leverage: float = Query(5.0),
+    leverage: float = Query(10.0),
     capital: float = Query(1000.0),
     fee: float = Query(0.07),
 ):

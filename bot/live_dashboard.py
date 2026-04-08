@@ -106,6 +106,16 @@ def api_equity():
     return [dict(r) for r in rows]
 
 
+@app.get("/api/live/trail")
+def api_trail():
+    """Get trailing stop status from trailer process."""
+    try:
+        from trailer import trail_state
+        return trail_state
+    except Exception:
+        return {"running": False, "positions": {}, "closed_today": []}
+
+
 @app.get("/api/live/prices")
 def api_prices():
     try:
@@ -226,6 +236,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div id="prices" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
   </div>
 
+  <!-- Trail 상태 -->
+  <div class="card full-width" id="trailCard" style="display:none;">
+    <h2>Trailing Stop 실시간 (<span id="trailStatus" style="color:#4ecdc4;">...</span>)</h2>
+    <table>
+      <thead><tr><th>종목</th><th>방향</th><th>진입가</th><th>Peak</th><th>현재가</th><th>Peak대비</th><th>트리거까지</th><th>손익%</th><th>손익$</th></tr></thead>
+      <tbody id="trailBody"></tbody>
+    </table>
+    <div id="trailClosed" style="margin-top:8px;font-size:11px;color:#666;"></div>
+  </div>
+
   <!-- 보유 포지션 -->
   <div class="card full-width">
     <h2>보유 포지션</h2>
@@ -330,6 +350,47 @@ async function refresh() {
         </tr>
       `).join('');
     }
+    // Trail status
+    try {
+      const trail = await (await fetch('/api/live/trail')).json();
+      const tc = document.getElementById('trailCard');
+      if (trail.running) {
+        tc.style.display = 'block';
+        document.getElementById('trailStatus').textContent = 'ACTIVE 0.3%';
+        const positions = Object.values(trail.positions || {});
+        if (positions.length > 0) {
+          document.getElementById('trailBody').innerHTML = positions.map(p => {
+            const distColor = p.distance < 0.1 ? 'neg' : 'pos';
+            const barWidth = Math.min(100, (p.drop_pct / p.trail_trigger) * 100);
+            return `<tr>
+              <td>${p.ticker}</td>
+              <td class="${p.direction.toLowerCase()}">${p.direction === 'LONG' ? '롱' : '숏'}</td>
+              <td>$${p.entry.toFixed(2)}</td>
+              <td style="color:#ffd93d">$${p.peak.toFixed(2)}</td>
+              <td style="font-weight:600">$${p.current.toFixed(2)}</td>
+              <td><div style="background:#1a1a2e;border-radius:4px;height:16px;width:80px;position:relative;">
+                <div style="background:${barWidth>80?'#ff6b6b':'#4ecdc4'};height:100%;width:${barWidth}%;border-radius:4px;"></div>
+                <span style="position:absolute;top:0;left:4px;font-size:10px;">${p.drop_pct.toFixed(2)}%</span>
+              </div></td>
+              <td class="${distColor}" style="font-weight:600">${p.distance.toFixed(2)}%</td>
+              <td class="${p.pnl_pct >= 0 ? 'pos' : 'neg'}">${p.pnl_pct >= 0 ? '+' : ''}${p.pnl_pct.toFixed(2)}%</td>
+              <td class="${p.pnl_usd >= 0 ? 'pos' : 'neg'}" style="font-weight:700">${p.pnl_usd >= 0 ? '+' : ''}$${p.pnl_usd.toFixed(2)}</td>
+            </tr>`;
+          }).join('');
+        } else {
+          document.getElementById('trailBody').innerHTML = '<tr><td colspan="9" style="color:#444">포지션 대기 중...</td></tr>';
+        }
+        const closed = trail.closed_today || [];
+        if (closed.length > 0) {
+          document.getElementById('trailClosed').innerHTML = '오늘 청산: ' + closed.map(c =>
+            `<span class="${c.pnl >= 0 ? 'pos' : 'neg'}">${c.ticker} ${c.direction === 'LONG' ? '롱' : '숏'} $${c.pnl.toFixed(2)}</span>`
+          ).join(' | ');
+        }
+      } else {
+        tc.style.display = 'none';
+      }
+    } catch(e) {}
+
   } catch(e) { console.error(e); }
 
   document.getElementById('clock').textContent = new Date().toLocaleTimeString();
