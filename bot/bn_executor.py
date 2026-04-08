@@ -114,13 +114,20 @@ class BinanceExecutor:
                 "type": "MARKET",
                 "quantity": qty,
             })
+            # avgPrice often comes as 0 for MARKET orders — fetch actual fill
+            fill_price = float(result.get("avgPrice", 0))
+            if fill_price == 0:
+                import time
+                time.sleep(1)
+                fill_price = self.get_price(ticker)  # fallback to current price
             return {
                 "success": True,
                 "ticker": ticker,
                 "symbol": sym,
                 "side": side,
                 "qty": float(result.get("origQty", qty)),
-                "price": float(result.get("avgPrice", price)),
+                "price": fill_price,
+                "value": float(result.get("origQty", qty)) * fill_price,
                 "orderId": result.get("orderId"),
                 "status": result.get("status"),
             }
@@ -152,12 +159,18 @@ class BinanceExecutor:
                         "quantity": qty,
                         "reduceOnly": "true",
                     })
+                    fill_price = float(result.get("avgPrice", 0))
+                    if fill_price == 0:
+                        import time
+                        time.sleep(1)
+                        fill_price = self.get_price(ticker)
                     return {
                         "success": True,
                         "ticker": ticker,
                         "side": side,
                         "qty": qty,
-                        "price": float(result.get("avgPrice", 0)),
+                        "price": fill_price,
+                        "value": qty * fill_price,
                         "orderId": result.get("orderId"),
                     }
                 except Exception as e:

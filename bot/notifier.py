@@ -69,7 +69,9 @@ def trade_opened(ticker, direction, qty, price, capital):
 
 def trade_closed(ticker, direction, entry, exit_price, pnl, balance):
     icon = "✅" if pnl >= 0 else "❌"
-    pct = (exit_price - entry) / entry * 100 if direction == "LONG" else (entry - exit_price) / entry * 100
+    pct = 0
+    if entry and entry > 0:
+        pct = (exit_price - entry) / entry * 100 if direction == "LONG" else (entry - exit_price) / entry * 100
     send(
         f"{icon} <b>CLOSED</b>\n"
         f"{ticker} {direction}\n"
