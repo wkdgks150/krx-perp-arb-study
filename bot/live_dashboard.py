@@ -39,17 +39,36 @@ def api_account():
         acct = ex.get_account()
         positions = ex.get_positions()
 
+        # Get current prices for all position symbols
+        current_prices = {}
+        for p in positions:
+            sym = p["symbol"]
+            ticker = sym.replace("USDT", "")
+            try:
+                current_prices[sym] = ex.get_price(ticker)
+            except Exception:
+                current_prices[sym] = 0
+
         pos_list = []
         for p in positions:
             amt = float(p["positionAmt"])
+            sym = p["symbol"]
+            entry = float(p["entryPrice"])
+            mark = current_prices.get(sym, 0)
+            pnl = float(p["unrealizedProfit"])
+            # Fee estimate (taker 0.05% × 2 sides × notional)
+            notional = abs(amt) * entry
+            est_fee = notional * 0.05 / 100 * 2
             pos_list.append({
-                "symbol": p["symbol"],
+                "symbol": sym,
                 "direction": "LONG" if amt > 0 else "SHORT",
                 "qty": abs(amt),
-                "entryPrice": float(p["entryPrice"]),
-                "markPrice": float(p.get("markPrice", 0)),
-                "pnl": float(p["unrealizedProfit"]),
+                "entryPrice": entry,
+                "markPrice": mark,
+                "pnl": pnl,
+                "estFee": round(est_fee, 2),
                 "leverage": p.get("leverage", "?"),
+                "notional": round(notional, 2),
             })
 
         return {
@@ -210,8 +229,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="card full-width">
     <h2>보유 포지션</h2>
     <table>
-      <thead><tr><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>현재가</th><th>손익</th><th>레버</th></tr></thead>
-      <tbody id="positionsBody"><tr><td colspan="7" style="color:#444">포지션 없음</td></tr></tbody>
+      <thead><tr><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>현재가</th><th>포지션값</th><th>손익</th><th>예상수수료</th><th>레버</th></tr></thead>
+      <tbody id="positionsBody"><tr><td colspan="9" style="color:#444">포지션 없음</td></tr></tbody>
     </table>
   </div>
 
@@ -228,8 +247,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="card">
     <h2>거래 내역</h2>
     <table>
-      <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>진입가</th><th>청산가</th><th>손익</th></tr></thead>
-      <tbody id="tradesBody"><tr><td colspan="6" style="color:#444">거래 없음</td></tr></tbody>
+      <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>진입가</th><th>청산가</th><th>손익</th><th>수수료</th></tr></thead>
+      <tbody id="tradesBody"><tr><td colspan="7" style="color:#444">거래 없음</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -252,16 +271,18 @@ async function refresh() {
       // Positions
       const pb = document.getElementById('positionsBody');
       if (acct.positions.length === 0) {
-        pb.innerHTML = '<tr><td colspan="7" style="color:#444">포지션 없음</td></tr>';
+        pb.innerHTML = '<tr><td colspan="9" style="color:#444">포지션 없음</td></tr>';
       } else {
         pb.innerHTML = acct.positions.map(p => `
           <tr>
-            <td>${p.symbol}</td>
-            <td class="${p.direction.toLowerCase()}">${p.direction}</td>
+            <td>${p.symbol.replace('USDT','')}</td>
+            <td class="${p.direction.toLowerCase()}">${p.direction === 'LONG' ? '롱' : '숏'}</td>
             <td>${p.qty}</td>
             <td>$${p.entryPrice.toFixed(2)}</td>
-            <td>$${p.markPrice.toFixed(2)}</td>
-            <td class="${p.pnl >= 0 ? 'pos' : 'neg'}">${p.pnl >= 0 ? '+' : ''}$${p.pnl.toFixed(2)}</td>
+            <td style="font-weight:600">$${p.markPrice.toFixed(2)}</td>
+            <td>$${p.notional?.toFixed(0) || '?'}</td>
+            <td class="${p.pnl >= 0 ? 'pos' : 'neg'}" style="font-weight:700">${p.pnl >= 0 ? '+' : ''}$${p.pnl.toFixed(2)}</td>
+            <td style="color:#888">$${p.estFee?.toFixed(2) || '?'}</td>
             <td>${p.leverage}x</td>
           </tr>
         `).join('');
@@ -296,10 +317,11 @@ async function refresh() {
         <tr>
           <td>${t.date}</td>
           <td>${t.ticker}</td>
-          <td class="${t.direction === 'LONG' ? 'long' : 'short'}">${t.direction}</td>
+          <td class="${t.direction === 'LONG' ? 'long' : 'short'}">${t.direction === 'LONG' ? '롱' : '숏'}</td>
           <td>$${t.entry_price?.toFixed(2) || '?'}</td>
           <td>$${t.exit_price?.toFixed(2) || '?'}</td>
-          <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'}">${t.net_pnl >= 0 ? '+' : ''}$${t.net_pnl?.toFixed(2) || '?'}</td>
+          <td class="${t.net_pnl >= 0 ? 'pos' : 'neg'}" style="font-weight:700">${t.net_pnl >= 0 ? '+' : ''}$${t.net_pnl?.toFixed(2) || '?'}</td>
+          <td style="color:#888">$${t.fee?.toFixed(2) || '?'}</td>
         </tr>
       `).join('');
     }
