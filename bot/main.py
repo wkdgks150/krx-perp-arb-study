@@ -8,6 +8,7 @@ Usage:
     python3 main.py close     # Close all positions
     python3 main.py status    # Show account + positions
     python3 main.py run       # scan + execute in one shot
+    python3 main.py dash      # Start live dashboard (port 8001)
 """
 import sys
 import os
@@ -30,11 +31,15 @@ def cmd_scan():
     print(f"  Score >= {config.MIN_SCORE}, Leverage {config.LEVERAGE}x")
     print(f"{'='*60}\n")
 
-    signals = scanner.scan_all()
+    try:
+        signals = scanner.scan_all()
+    except Exception as e:
+        notifier.error("Scanner crashed", e)
+        raise
 
     if not signals:
         print("  No signals today.")
-        notifier.signal_alert([])
+        notifier.no_signals()
         return []
 
     for s in signals:
@@ -43,21 +48,33 @@ def cmd_scan():
         print(f"      {', '.join(s['reasons'])}")
         storage.save_signal(s["date"], s["ticker"], s["direction"], s["score"], s["reasons"], s["gap_pct"])
 
-    notifier.signal_alert(signals)
+    notifier.signal_detected(signals)
     return signals
 
 
 def cmd_execute():
     today = datetime.now().strftime("%Y-%m-%d")
-    ex = BinanceExecutor()
-    capital = ex.get_balance()
+
+    try:
+        ex = BinanceExecutor()
+        capital = ex.get_balance()
+    except Exception as e:
+        notifier.connection_error("Binance", e)
+        raise
 
     print(f"\n{'='*60}")
     print(f"  Gap FADE Executor — {today}")
     print(f"  Balance: ${capital:.2f}")
     print(f"{'='*60}\n")
 
-    # Get all pending signals (any date)
+    # Check minimum balance
+    min_required = 10.0
+    if capital < min_required:
+        notifier.balance_low(capital, min_required)
+        print(f"  Balance too low: ${capital:.2f} < ${min_required}")
+        return
+
+    # Get all pending signals
     import sqlite3
     conn = sqlite3.connect(str(config.DB_PATH))
     rows = conn.execute("SELECT * FROM signals WHERE status='pending' ORDER BY score DESC").fetchall()
@@ -67,9 +84,10 @@ def cmd_execute():
         return
 
     n = len(rows)
-    per_trade = capital * config.MAX_POSITION_PCT / n * config.LEVERAGE
+    per_trade_capital = capital * config.MAX_POSITION_PCT / n
+    per_trade_position = per_trade_capital * config.LEVERAGE
     print(f"  Signals: {n}")
-    print(f"  Per-trade position: ${per_trade:.2f} ({config.LEVERAGE}x on ${capital * config.MAX_POSITION_PCT / n:.2f})")
+    print(f"  Per-trade: ${per_trade_capital:.2f} x {config.LEVERAGE}x = ${per_trade_position:.2f}")
     print()
 
     for r in rows:
@@ -85,9 +103,9 @@ def cmd_execute():
 
         try:
             if direction == "LONG":
-                result = ex.long(ticker, per_trade)
+                result = ex.long(ticker, per_trade_position)
             else:
-                result = ex.short(ticker, per_trade)
+                result = ex.short(ticker, per_trade_position)
 
             if result["success"]:
                 conn.execute("UPDATE signals SET status='executed' WHERE id=?", (sig_id,))
@@ -97,16 +115,25 @@ def cmd_execute():
             else:
                 conn.execute("UPDATE signals SET status='failed' WHERE id=?", (sig_id,))
                 conn.commit()
-                print(f"    FAIL {result['error']}")
+                err_msg = result["error"]
+                print(f"    FAIL {err_msg}")
+                notifier.error(f"Order failed: {ticker} {direction}\n{err_msg}")
+
         except Exception as e:
             conn.execute("UPDATE signals SET status='failed' WHERE id=?", (sig_id,))
             conn.commit()
             print(f"    ERROR {e}")
+            notifier.error(f"Order exception: {ticker} {direction}", e)
 
 
 def cmd_close():
     today = datetime.now().strftime("%Y-%m-%d")
-    ex = BinanceExecutor()
+
+    try:
+        ex = BinanceExecutor()
+    except Exception as e:
+        notifier.connection_error("Binance", e)
+        raise
 
     print(f"\n{'='*60}")
     print(f"  Gap FADE Closer — {today}")
@@ -129,23 +156,37 @@ def cmd_close():
 
     print()
     results = ex.close_all()
+    n_success = 0
     for r in results:
         if r["success"]:
+            n_success += 1
             print(f"  Closed {r['ticker']} {r['qty']} @ ${r['price']:.2f}")
+            # Find entry price for P&L notification
+            for p in positions:
+                if r["ticker"] in p["symbol"]:
+                    entry = float(p["entryPrice"])
+                    pnl = float(p["unrealizedProfit"])
+                    direction = "LONG" if float(p["positionAmt"]) > 0 else "SHORT"
+                    notifier.trade_closed(r["ticker"], direction, entry, r["price"], pnl, balance_before + pnl)
         else:
             print(f"  Failed: {r['error']}")
+            notifier.error(f"Close failed: {r.get('ticker','?')}\n{r['error']}")
 
     import time
     time.sleep(2)
     balance_after = ex.get_balance()
     pnl = balance_after - balance_before
     print(f"\n  Balance: ${balance_before:.2f} -> ${balance_after:.2f} (P&L: ${pnl:+.2f})")
-    notifier.daily_summary(today, len(results), sum(1 for r in results if r.get("success")), pnl, balance_after)
+    notifier.daily_summary(today, len(results), n_success, pnl, balance_after)
 
 
 def cmd_status():
-    ex = BinanceExecutor()
-    bal = ex.get_balance()
+    try:
+        ex = BinanceExecutor()
+        bal = ex.get_balance()
+    except Exception as e:
+        print(f"Connection error: {e}")
+        return
 
     print(f"\n{'='*60}")
     print(f"  Gap FADE Bot — Binance Futures")
@@ -165,27 +206,37 @@ def cmd_status():
             print(f"    {p['symbol']}: {d} {abs(amt)} @ ${entry:.2f} | PnL: ${pnl:+.2f}")
     else:
         print(f"\n  No open positions")
-
-    recent = storage.get_recent_trades(5)
-    if recent:
-        print(f"\n  Recent trades:")
-        for t in recent:
-            icon = "+" if t["net_pnl"] > 0 else "-"
-            print(f"    [{icon}] {t['date']} {t['ticker']} {t['direction']} ${t['net_pnl']:+.2f}")
     print()
 
 
 def cmd_run():
-    signals = cmd_scan()
-    if signals:
-        cmd_execute()
+    """Scan + Execute in one shot with full error handling."""
+    notifier.bot_started()
+    try:
+        signals = cmd_scan()
+        if signals:
+            cmd_execute()
+    except Exception as e:
+        notifier.error("Bot run failed", e)
+        raise
+
+
+def cmd_dash():
+    """Start live monitoring dashboard on port 8001."""
+    from live_dashboard import app
+    import uvicorn
+    print("Starting Live Dashboard on http://localhost:8001")
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return
-    cmds = {"scan": cmd_scan, "execute": cmd_execute, "close": cmd_close, "status": cmd_status, "run": cmd_run}
+    cmds = {
+        "scan": cmd_scan, "execute": cmd_execute, "close": cmd_close,
+        "status": cmd_status, "run": cmd_run, "dash": cmd_dash,
+    }
     cmd = sys.argv[1].lower()
     if cmd in cmds:
         cmds[cmd]()
