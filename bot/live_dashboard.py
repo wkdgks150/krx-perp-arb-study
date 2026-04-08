@@ -234,7 +234,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<div style="padding:8px 24px;" class="refresh-info">10초마다 자동 새로고침</div>
+<div style="padding:8px 24px;" class="refresh-info">10초마다 자동 새로고침 | 코드 push 시 1분 내 자동 배포</div>
 
 <script>
 async function refresh() {
