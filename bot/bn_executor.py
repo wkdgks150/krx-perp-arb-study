@@ -81,8 +81,17 @@ class BinanceExecutor:
         acct = _signed("GET", "/fapi/v2/account")
         return [p for p in acct.get("positions", []) if float(p.get("positionAmt", 0)) != 0]
 
+    def set_isolated(self, ticker):
+        """Set margin type to ISOLATED."""
+        sym = SYMBOLS.get(ticker, ticker + "USDT")
+        try:
+            return _signed("POST", "/fapi/v1/marginType", {"symbol": sym, "marginType": "ISOLATED"})
+        except Exception:
+            pass  # already isolated
+
     def set_leverage(self, ticker, leverage=10):
         sym = SYMBOLS.get(ticker, ticker + "USDT")
+        self.set_isolated(ticker)  # always ensure isolated
         return _signed("POST", "/fapi/v1/leverage", {"symbol": sym, "leverage": leverage})
 
     def market_order(self, ticker, side, usdc_amount):
