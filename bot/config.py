@@ -31,7 +31,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ─── Strategy ───
-TICKERS = ["GOOGL", "MSFT", "TSLA"]  # Hyperliquid spot markets available
+TICKERS = ["GOOGL", "NVDA", "TSLA"]  # Binance Futures stock perps
 GAP_THRESHOLD = 0.5       # %
 BODY_THRESHOLD = 1.0      # %
 CONSECUTIVE_GAP = True
