@@ -157,6 +157,7 @@ def cmd_close():
     print()
     results = ex.close_all()
     n_success = 0
+    running_pnl = 0.0
     for r in results:
         if r["success"]:
             n_success += 1
@@ -166,8 +167,19 @@ def cmd_close():
                 if r["ticker"] in p["symbol"]:
                     entry = float(p["entryPrice"])
                     pnl = float(p["unrealizedProfit"])
-                    direction = "LONG" if float(p["positionAmt"]) > 0 else "SHORT"
-                    notifier.trade_closed(r["ticker"], direction, entry, r["price"], pnl, balance_before + pnl)
+                    amt = float(p["positionAmt"])
+                    direction = "LONG" if amt > 0 else "SHORT"
+                    running_pnl += pnl
+                    storage.save_trade(
+                        signal_id=0, date=today,
+                        ticker=r["ticker"], direction=direction, score=0, reasons="closer",
+                        gap_pct=0, entry_price=entry, exit_price=r["price"],
+                        shares=abs(amt), gross_pnl=round(pnl, 2), fee=0, net_pnl=round(pnl, 2),
+                        capital_before=balance_before,
+                        capital_after=balance_before + running_pnl,
+                        platform="binance",
+                    )
+                    notifier.trade_closed(r["ticker"], direction, entry, r["price"], pnl, balance_before + running_pnl)
         else:
             print(f"  Failed: {r['error']}")
             notifier.error(f"Close failed: {r.get('ticker','?')}\n{r['error']}")
@@ -177,6 +189,9 @@ def cmd_close():
     balance_after = ex.get_balance()
     pnl = balance_after - balance_before
     print(f"\n  Balance: ${balance_before:.2f} -> ${balance_after:.2f} (P&L: ${pnl:+.2f})")
+    # Closer only reaches here when positions existed (i.e., trailer missed them).
+    # Safe to write daily_summary because trailer didn't get to.
+    storage.save_daily_summary(today, balance_before, balance_after, len(results), n_success, pnl)
     notifier.daily_summary(today, len(results), n_success, pnl, balance_after)
 
 

@@ -8,6 +8,7 @@ import hashlib
 import time
 import ssl
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -40,9 +41,17 @@ SYMBOLS = {
 }
 
 
+def _read_error_body(e: HTTPError) -> str:
+    try:
+        return e.read().decode("utf-8", errors="replace")[:400]
+    except Exception:
+        return ""
+
+
 def _signed(method, path, params=None):
     params = params or {}
     params["timestamp"] = int(time.time() * 1000)
+    params["recvWindow"] = 10000
     query = urlencode(params)
     sig = hmac.new(SECRET.encode(), query.encode(), hashlib.sha256).hexdigest()
     url = f"{BASE}{path}?{query}&signature={sig}"
@@ -52,16 +61,22 @@ def _signed(method, path, params=None):
         body = f"{query}&signature={sig}"
         data = body.encode()
     req = Request(url, data=data, method=method, headers={"X-MBX-APIKEY": API_KEY})
-    with urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except HTTPError as e:
+        raise RuntimeError(f"Binance {method} {path} → HTTP {e.code}: {_read_error_body(e)}") from None
 
 
 def _public(path, params=None):
     query = urlencode(params) if params else ""
     url = f"{BASE}{path}?{query}" if query else f"{BASE}{path}"
     req = Request(url)
-    with urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except HTTPError as e:
+        raise RuntimeError(f"Binance GET {path} → HTTP {e.code}: {_read_error_body(e)}") from None
 
 
 class BinanceExecutor:

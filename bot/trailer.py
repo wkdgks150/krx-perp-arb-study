@@ -26,8 +26,9 @@ from bn_executor import BinanceExecutor
 
 TRAIL_PCT = 0.3
 CHECK_INTERVAL = 0.5
+# 04:50 KST = 19:50 UTC — 5분 일찍 닫아서 04:55 launchd closer와 레이스 회피
 SAFETY_CLOSE_HOUR = 19
-SAFETY_CLOSE_MIN = 55
+SAFETY_CLOSE_MIN = 50
 
 # Shared state — written to file for dashboard to read
 TRAIL_STATE_FILE = os.path.join(os.path.dirname(__file__), "trail_state.json")
